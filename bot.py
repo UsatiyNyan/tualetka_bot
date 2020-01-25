@@ -1,13 +1,18 @@
 import telebot
-from os import environ
+import os
 from replies import *
+from time import sleep
+import signal
 
 
-bot = telebot.TeleBot(environ.get("BOTKEY"))
-users = {
-}
+bot = telebot.TeleBot(os.environ.get("BOTKEY"))
+users = {}
+pid = 0
+sleep_time = os.environ.get("SLEEP")
+if sleep_time is None:
+    sleep_time = 1000
+
 # TODO:
-#  add annoying reminder
 #  add db support
 
 
@@ -30,8 +35,15 @@ def join(message):
 
 @bot.message_handler(commands=['bought'])
 def bought_toilet_paper(message):
-    username = message.from_user.username
-    users[username][0] += 1
+    current_username = message.from_user.username
+    current_user = users.get(current_username)
+    if current_user is None:
+        bot.send_message(message.chat.id, f"@{current_username}, заджойнись сука\n"
+                                          f"/join")
+        return
+
+    current_user[0] += 1
+    os.kill(pid, signal.SIGTERM)
 
     # make everyone available
     for user in users.keys():
@@ -39,13 +51,17 @@ def bought_toilet_paper(message):
 
     bot.send_sticker(message.chat.id, very_cool_stickers())
     bot.send_message(message.chat.id,
-                     f"@{message.from_user.username}, аригато гозаимасу, "
-                     f"ты уже купил {users[username][0]} туалеток!")
+                     f"@{current_username}, аригато гозаимасу, "
+                     f"ты уже купил {current_user[0]} туалеток!")
 
 
 @bot.message_handler(commands=['nomoney'])
 def no_money(message):
-    users[message.from_user.username][1] = False  # make him unavailable
+    current_username = message.from_user.username
+    current_user = users.get(current_username)
+    if current_user is not None:
+        current_user[1] = False  # make him unavailable
+
     bot.send_sticker(message.chat.id, didnt_buy_stickers())
     bot.send_message(message.chat.id, f"@{message.from_user.username} уу сука я запомнил тебя")
     need_toilet_paper(message)
@@ -53,10 +69,19 @@ def no_money(message):
 
 @bot.message_handler(commands=['need'])
 def need_toilet_paper(message):
+    current_username = message.from_user.username
+    if len(users.keys()) == 0:
+        bot.send_message(message.chat.id, f"@{current_username}, заджойнись сука\n"
+                                          f"/join")
     available = list(filter(lambda x: users[x][1], users.keys()))
     if len(available):
         available = min(available, key=lambda x: users[x][0])
-        bot.send_message(message.chat.id, f"@{available}, купляешь туалетку")
+        global pid
+        pid = os.fork()
+        while pid == 0:
+            bot.send_message(message.chat.id, f"@{available}, купляешь туалетку")
+            sleep(sleep_time)
+
     else:
         bot.send_sticker(message.chat.id, fuck_you_stickers())
         bot.send_message(message.chat.id, "ТАК БЛЯ ВСЕ ХОТЯТ СРАТЬ А ПОКУПАТЬ НИКТО НЕ ХОЧЕТ ВЫ АХУЕЛИ?")
