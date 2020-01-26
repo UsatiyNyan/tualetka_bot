@@ -1,19 +1,24 @@
 import telebot
 import os
 from replies import *
-from time import sleep
-import signal
+from util import API_KEYS
+
+# if os.environ.get("LOCAL") is None:
+bot = telebot.TeleBot(API_KEYS.get("TUALETKA_BOT"))
+# else:
+#     bot = telebot.TeleBot(os.environ.get("BOTKEY"))
 
 
-bot = telebot.TeleBot(os.environ.get("BOTKEY"))
 users = {}
-pid = 0
 sleep_time = os.environ.get("SLEEP")
 if sleep_time is None:
     sleep_time = 1000
 
+
 # TODO:
 #  add db support
+#  revive the annoyance
+#  may be schedulers?
 
 
 @bot.message_handler(commands=['help'])
@@ -23,7 +28,8 @@ def help_handler(message):
                      f"/join чтобы стать частью семьи\n"
                      f"/bought если ты купил\n"
                      f"/nomoney если не можешь купить\n"
-                     f"/need если туалетка закончилась")
+                     f"/need если туалетка закончилась\n"
+                     f"/list шобы показать чо пачом по ребятам")
 
 
 @bot.message_handler(commands=['join'])
@@ -43,7 +49,6 @@ def bought_toilet_paper(message):
         return
 
     current_user[0] += 1
-    os.kill(pid, signal.SIGTERM)
 
     # make everyone available
     for user in users.keys():
@@ -73,15 +78,10 @@ def need_toilet_paper(message):
     if len(users.keys()) == 0:
         bot.send_message(message.chat.id, f"@{current_username}, заджойнись сука\n"
                                           f"/join")
-    available = list(filter(lambda x: users[x][1], users.keys()))
+    available = sorted(list(filter(lambda x: users[x][1], users.keys())))
     if len(available):
         available = min(available, key=lambda x: users[x][0])
-        global pid
-        pid = os.fork()
-        while pid == 0:
-            bot.send_message(message.chat.id, f"@{available}, купляешь туалетку")
-            sleep(sleep_time)
-
+        bot.send_message(message.chat.id, f"@{available}, купляешь туалетку")
     else:
         bot.send_sticker(message.chat.id, fuck_you_stickers())
         bot.send_message(message.chat.id, "ТАК БЛЯ ВСЕ ХОТЯТ СРАТЬ А ПОКУПАТЬ НИКТО НЕ ХОЧЕТ ВЫ АХУЕЛИ?")
@@ -89,6 +89,15 @@ def need_toilet_paper(message):
         for user in users.keys():
             users[user][1] = True
         need_toilet_paper(message)
+
+
+@bot.message_handler(commands=['list'])
+def list_users(message):
+    list_of_users = ""
+    for user, info in users.items():
+        list_of_users += f"{user} купил {info[0]} туалеток, availability: {info[1]}\n"
+    list_of_users += "nya^_^\n"
+    bot.send_message(message.chat.id, list_of_users)
 
 
 """pls dont read or translate those"""
